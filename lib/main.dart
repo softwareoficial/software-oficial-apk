@@ -197,11 +197,15 @@ class _ScannerOverlayState extends State<_ScannerOverlay> {
                     borderRadius: BorderRadius.circular(15),
                     child: MobileScanner(
                       controller: widget.controller,
-                      onDetect: (capture) {
+                      onDetect: (capture) async {
                         final List<Barcode> barcodes = capture.barcodes;
                         for (final barcode in barcodes) {
                           final String? code = barcode.rawValue;
                           if (code != null) {
+                            // Detener la cámara antes de cerrar
+                            await widget.controller.stop();
+                            // Pequeño retardo para dar feedback visual
+                            await Future.delayed(const Duration(milliseconds: 200));
                             widget.onScanCompleted(code);
                             break;
                           }
