@@ -1,14 +1,9 @@
 #!/bin/bash
 
 # Script para automatizar la preparación y compilación del proyecto Flutter
-# Ubicación: raíz de apk/apk_webview_app/
-
-PROJECT_DIR="apk/apk_webview_app"
+# Ubicación: raíz del proyecto
 
 echo "--- Iniciando proceso de compilación de Flutter ---"
-
-# Moverse al directorio del proyecto
-cd "$PROJECT_DIR" || { echo "Directorio $PROJECT_DIR no encontrado"; exit 1; }
 
 # 1. Limpiar el proyecto
 echo "-> Limpiando proyecto..."

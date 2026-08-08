@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.apk_webview_app"
+    namespace = "com.example.software_oficial"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -15,13 +15,7 @@ android {
     }
 
     defaultConfig {
-        ndk {
-            abiFilters.add("armeabi-v7a")
-        }
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.apk_webview_app"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        applicationId = "com.example.software_oficial"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
