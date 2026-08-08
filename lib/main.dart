@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'camera_sensor_service.dart';
+import 'advanced_settings_panel.dart';
+import 'scan_batch_manager.dart';
 
 void main() {
   runApp(const MyApp());
@@ -89,19 +92,8 @@ class _WebViewPageState extends State<WebViewPage> {
       context: context,
       builder: (context) => _ScannerOverlay(
         controller: _scannerController,
+        webViewController: _webViewController,
         onScanCompleted: (code) {
-          if (code != null) {
-            final jsCode = """
-              window.dispatchEvent(new MessageEvent('message', {
-                data: {
-                  type: 'BARCODE_SCANNED',
-                  code: '${code.replaceAll("'", "\\'")}',
-                  mode: '$mode'
-                }
-              }));
-            """;
-            _webViewController.evaluateJavascript(source: jsCode);
-          }
           Navigator.of(context).pop();
         },
       ),
@@ -149,10 +141,12 @@ class _WebViewPageState extends State<WebViewPage> {
 // Nuevo StatefulWidget para encapsular la lógica del escáner y su ciclo de vida
 class _ScannerOverlay extends StatefulWidget {
   final MobileScannerController controller;
+  final InAppWebViewController webViewController;
   final Function(String?) onScanCompleted;
 
   const _ScannerOverlay({
     required this.controller,
+    required this.webViewController,
     required this.onScanCompleted,
   });
 
@@ -161,16 +155,19 @@ class _ScannerOverlay extends StatefulWidget {
 }
 
 class _ScannerOverlayState extends State<_ScannerOverlay> {
+  late final CameraSensorService _sensorService;
+  late final ScanBatchManager _batchManager;
+
   @override
   void initState() {
     super.initState();
-    // Asegurar que la cámara inicie cuando el widget esté montado
+    _sensorService = CameraSensorService(controller: widget.controller);
+    _batchManager = ScanBatchManager();
     widget.controller.start();
   }
 
   @override
   void dispose() {
-    // Detener la cámara al desmontar el widget
     widget.controller.stop();
     super.dispose();
   }
@@ -178,58 +175,71 @@ class _ScannerOverlayState extends State<_ScannerOverlay> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => Navigator.of(context).pop(), // Cierre al tocar fuera
+      onTap: () => Navigator.of(context).pop(), // Cierre al tocar el fondo
       child: Scaffold(
-        backgroundColor: Colors.black54,
-        body: Center(
-          child: GestureDetector(
-            onTap: () {}, // No cerrar si tocamos dentro
-            child: Container(
-              width: 320,
-              height: 250,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(15),
+        backgroundColor: Colors.black.withOpacity(0.1),
+        body: SafeArea(
+          child: Column(
+            children: [
+              const SizedBox(height: 10),
+              // Cámara rectangular arriba
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Column(
+                  children: [
+                    Container(
+                      height: 250, // Altura rectangular
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
+                        child: MobileScanner(
+                          controller: widget.controller,
+                          onDetect: (capture) {
+                            final List<Barcode> barcodes = capture.barcodes;
+                            for (final barcode in barcodes) {
+                              final String? code = _sensorService.validateBarcode(barcode);
+                              if (code != null) {
+                                HapticFeedback.lightImpact();
+                                final jsCode = """
+                                  window.dispatchEvent(new MessageEvent('message', {
+                                    data: {
+                                      type: 'BARCODE_SCANNED',
+                                      code: '${code.replaceAll("'", "\\'")}'
+                                    }
+                                  }));
+                                """;
+                                widget.webViewController.evaluateJavascript(source: jsCode);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text("Enviado: $code"), 
+                                    duration: Duration(milliseconds: 500),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                                break;
+                              }
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    // Controles pegados debajo, integrados al borde
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: const BoxDecoration(
+                        color: Colors.black87,
+                        borderRadius: BorderRadius.vertical(bottom: Radius.circular(15)),
+                      ),
+                      child: AdvancedSettingsPanel(cameraSensorService: _sensorService),
+                    ),
+                  ],
+                ),
               ),
-              child: Stack(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(15),
-                    child: MobileScanner(
-                      controller: widget.controller,
-                      onDetect: (capture) async {
-                        final List<Barcode> barcodes = capture.barcodes;
-                        for (final barcode in barcodes) {
-                          final String? code = barcode.rawValue;
-                          if (code != null) {
-                            // Detener la cámara antes de cerrar
-                            await widget.controller.stop();
-                            // Pequeño retardo para dar feedback visual
-                            await Future.delayed(const Duration(milliseconds: 200));
-                            widget.onScanCompleted(code);
-                            break;
-                          }
-                        }
-                      },
-                    ),
-                  ),
-                  Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.green, width: 4),
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                  ),
-                  Positioned(
-                    top: 5,
-                    right: 5,
-                    child: IconButton(
-                      icon: const Icon(Icons.close, color: Colors.black, size: 30),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+              const Spacer(), // Espacio libre transparente debajo
+            ],
           ),
         ),
       ),
